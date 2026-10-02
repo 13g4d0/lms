@@ -55,11 +55,12 @@
 				</div>
 			</div>
 			<div class="flex flex-col space-y-4 pt-5 border-b">
-				<Code
+				<!-- [taller] <Code> no existe en frappe-ui 1.0 (no se pintaba editor); se usa el editor propio del LMS. -->
+				<CodeEditor
 					v-model="code"
-					:language="exercise.doc?.language.toLowerCase()"
+					:type="exercise.doc?.language"
 					height="400px"
-					maxHeight="1000px"
+					:showLineNumbers="true"
 				/>
 				<div class="flex flex-col space-y-1">
 					<span v-if="error" class="text-xs text-ink-gray-5 px-1">
@@ -144,6 +145,7 @@ import {
 } from 'frappe-ui'
 import { computed, inject, onMounted, ref, watch } from 'vue'
 import PageHeader from '@/components/Layouts/PageHeader.vue'
+import CodeEditor from '@/components/Controls/CodeEditor.vue'
 import { sessionStore } from '@/stores/session'
 import { useRouter } from 'vue-router'
 import { openSettings } from '@/utils'

@@ -2266,11 +2266,107 @@ def validate_meta_data_permissions(meta_type: str):
 
 @frappe.whitelist()
 def create_programming_exercise_submission(exercise: str, submission: str, code: str, test_cases: list):
-	frappe.only_for(["Moderator", "Course Creator", "Batch Evaluator"])
+	# [taller] Upstream (7e683f8b4, 2026-02-16) dejó fuera a «LMS Student», que es quien resuelve los ejercicios. El
+	# DocType ya le deja crear y editar solo SUS envíos, y update_exercise_submission comprueba que el envío sea suyo.
+	frappe.only_for(["Moderator", "Course Creator", "Batch Evaluator", "LMS Student"])
+	if submission != "new":
+		exercise = frappe.db.get_value("LMS Programming Exercise Submission", submission, "exercise")
+	test_cases = _test_cases_verificados(exercise, test_cases, code)
 	if submission == "new":
 		return make_new_exercise_submission(exercise, code, test_cases)
 	else:
 		update_exercise_submission(submission, code, test_cases)
+
+
+# [taller] El mismo código de partida que pone la página (ProgrammingExerciseSubmission.vue, updateBoilerPlate): la
+# página lo quita antes de guardar y lo vuelve a poner delante al cargar; el servidor hace lo mismo para ejecutar.
+_CODIGO_DE_PARTIDA = {
+	"Python": 'with open("stdin", "r") as f:\n    data = f.read()\n\ninputs = data.split() if len(data) else []\n\n'
+	"# inputs is a list of strings\n# write your code below\n\n",
+	"JavaScript": "const fs = require('fs');\n\nlet input = fs.readFileSync('/app/stdin', 'utf8').trim();\n"
+	'const inputs = input.split("\\n");\n// inputs is an array of strings\n// write your code below\n',
+}
+
+
+def _ejecutar_en_falcon(url: str, lenguaje: str, programa: str, entrada: str) -> tuple:
+	"""[taller] Ejecuta en Falcon (POST /exec) como lo hace la página: la entrada en el fichero «stdin». Devuelve
+	(salida sin espacios sobrantes, código de salida)."""
+	import requests
+
+	r = requests.post(
+		f"{url.rstrip('/')}/exec",
+		json={
+			"runtime": lenguaje.lower(),
+			"code": programa,
+			"files": [{"filename": "stdin", "contents": entrada}],
+			"raw_output": True,
+		},
+		timeout=60,
+	)
+	r.raise_for_status()
+	trozos, codigo_salida = [], None
+	for linea in r.text.splitlines():
+		if not linea.strip():
+			continue
+		msg = json.loads(linea)
+		if msg.get("msgtype") == "write":
+			trozos.append(msg.get("data") or "")
+		elif msg.get("msgtype") == "exitstatus":
+			codigo_salida = msg.get("exitstatus")
+	return "".join(trozos).strip(), codigo_salida
+
+
+def _test_cases_verificados(exercise: str, test_cases: list, code: str = "") -> list:
+	"""[taller] El estado de cada caso lo decide el servidor, nunca el navegador.
+
+	Con `falcon_internal_url` en la configuración del sitio, el servidor EJECUTA el código guardado (código de partida
+	+ código del alumno) en Falcon con la entrada de cada caso y compara con la salida esperada del ejercicio: lo que
+	mande el navegador no cuenta. Si Falcon no responde, no se guarda nada. Sin esa configuración, se toma la salida
+	que manda el navegador (falsificable) y se recalcula el estado con lo esperado del ejercicio. Un caso que no se
+	ejecuta o que termina con error cuenta como fallido."""
+	if not exercise:
+		frappe.throw(_("Exercise not found."), frappe.DoesNotExistError)
+	ejercicio = frappe.get_doc("LMS Programming Exercise", exercise)
+	casos = list(ejercicio.test_cases)
+	falcon = frappe.conf.get("falcon_internal_url")
+
+	if falcon:
+		from concurrent.futures import ThreadPoolExecutor
+
+		partida = _CODIGO_DE_PARTIDA.get(ejercicio.language, "")
+		programa = code if (not partida or partida in (code or "")) else partida + (code or "")
+		try:
+			with ThreadPoolExecutor(max_workers=max(1, min(4, len(casos)))) as hilos:
+				ejecutados = list(
+					hilos.map(lambda c: _ejecutar_en_falcon(falcon, ejercicio.language, programa, c.input or ""), casos)
+				)
+		except Exception:
+			frappe.log_error(title="Falcon: no se pudo ejecutar el envío")
+			frappe.throw(_("Could not run your code on the server. Please try again."))
+		resultados = [
+			(salida, codigo_salida == 0 and salida == (caso.expected_output or "").strip())
+			for caso, (salida, codigo_salida) in zip(casos, ejecutados)
+		]
+	else:
+		salidas = {}
+		for row in frappe.parse_json(test_cases) or []:
+			salidas.setdefault((row.get("input") or "").strip(), row.get("output") or "")
+		resultados = []
+		for caso in casos:
+			entrada = (caso.input or "").strip()
+			salida = salidas.get(entrada, "")
+			resultados.append((salida, entrada in salidas and salida.strip() == (caso.expected_output or "").strip()))
+
+	return [
+		{
+			"input": caso.input,
+			# La salida es obligatoria en el DocType: sin esto, un programa que no imprime nada no se puede guardar.
+			"output": salida if salida.strip() else "(sin salida)",
+			"expected_output": caso.expected_output,
+			"status": "Passed" if ok else "Failed",
+		}
+		for caso, (salida, ok) in zip(casos, resultados)
+	]
 
 
 def make_new_exercise_submission(exercise: str, code: str, test_cases: list):
