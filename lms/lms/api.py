@@ -160,11 +160,12 @@ def _doctype_permissions():
 
 @frappe.whitelist(allow_guest=True)
 def get_translations():
+	language = None
 	if frappe.session.user != "Guest":
 		language = frappe.db.get_value("User", frappe.session.user, "language")
-	else:
-		language = frappe.db.get_single_value("System Settings", "language")
-	return get_all_translations(language)
+	# [taller] Un usuario sin idioma propio recibe el del sitio, como en el escritorio de Frappe. Antes recibía
+	# get_all_translations(None) = {} y veía el LMS en inglés aunque el sitio estuviera en otro idioma.
+	return get_all_translations(language or frappe.db.get_single_value("System Settings", "language"))
 
 
 @frappe.whitelist()
