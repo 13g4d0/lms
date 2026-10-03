@@ -31,16 +31,16 @@
 				</div>
 				<div class="flex items-center gap-x-2">
 					<Badge
-						v-if="submission.doc?.status"
-						:theme="submission.doc.status == 'Passed' ? 'green' : 'red'"
+						v-if="submissionDoc?.status"
+						:theme="submissionDoc.status == 'Passed' ? 'green' : 'red'"
 					>
-						{{ __(submission.doc.status) }}
+						{{ __(submissionDoc.status) }}
 					</Badge>
 					<Button
 						v-if="
 							!falconError &&
 							(submissionID == 'new' ||
-								user.data?.name == submission.doc?.owner)
+								user.data?.name == submissionDoc?.owner)
 						"
 						variant="solid"
 						@click="submitCode"
@@ -139,7 +139,7 @@ import {
 	toast,
 	usePageMeta,
 } from 'frappe-ui'
-import { computed, inject, onMounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, ref, shallowRef, watch } from 'vue'
 import PageHeader from '@/components/Layouts/PageHeader.vue'
 import CodeEditor from '@/components/Controls/CodeEditor.vue'
 import { sessionStore } from '@/stores/session'
@@ -204,10 +204,10 @@ const checkIfInLesson = () => {
 
 const fetchSubmission = (name: string = '') => {
 	if (name) {
-		submission.name = name
-		submission.reload()
+		submission.value = submissionFor(name)
+		submission.value.reload()
 	} else if (props.submissionID != 'new') {
-		submission.reload()
+		submission.value?.reload()
 	}
 }
 
@@ -218,21 +218,30 @@ const exercise = createDocumentResource({
 	auto: true,
 })
 
-const submission = createDocumentResource({
-	doctype: 'LMS Programming Exercise Submission',
-	name: props.submissionID,
-	auto: false,
-	onError(error: any) {
-		if (error.messages?.[0].includes('not found')) {
-			router.push({
-				name: 'ProgrammingExerciseSubmission',
-				params: { exerciseID: props.exerciseID, submissionID: 'new' },
-			})
-		} else {
-			toast.error(__(error.messages?.[0] || error))
-		}
-	},
-})
+// [taller] frappe-ui guarda cada documento en el navegador bajo «doctype + nombre» con el que se creó el recurso.
+// Con el nombre 'new' (el mismo en todos los ejercicios) y cambiándolo después al del envío guardado, el envío de un
+// ejercicio quedaba guardado como 'new' y su código aparecía en cualquier otro ejercicio que se abriera nuevo. Como en
+// develop (71e68420): el recurso solo existe para un envío real, y cada envío tiene el suyo.
+const submissionFor = (name: string) =>
+	createDocumentResource({
+		doctype: 'LMS Programming Exercise Submission',
+		name,
+		auto: false,
+		onError(error: any) {
+			if (error.messages?.[0].includes('not found')) {
+				router.push({
+					name: 'ProgrammingExerciseSubmission',
+					params: { exerciseID: props.exerciseID, submissionID: 'new' },
+				})
+			} else {
+				toast.error(__(error.messages?.[0] || error))
+			}
+		},
+	})
+const submission = shallowRef(
+	props.submissionID === 'new' ? null : submissionFor(props.submissionID)
+)
+const submissionDoc = computed(() => submission.value?.doc ?? null)
 
 watch(exercise, () => {
 	updateCode()
@@ -287,7 +296,7 @@ const updateTestCases = (doc: any) => {
 }
 
 watch(
-	() => submission.doc,
+	() => submissionDoc.value,
 	(doc) => {
 		if (doc) {
 			checkIfUserIsPermitted(doc)
