@@ -83,7 +83,7 @@
 				<div v-if="testCases.length" class="divide-y mt-5">
 					<div
 						v-for="(testCase, index) in testCases"
-						:key="testCase.input"
+						:key="index"
 						class="py-3"
 					>
 						<div class="flex items-center mb-3">
@@ -106,23 +106,19 @@
 								<div class="text-xs text-ink-gray-7">
 									{{ __('Input') }}
 								</div>
-								<div class="text-ink-gray-9">{{ testCase.input }}</div>
+								<div class="text-ink-gray-9 whitespace-pre-wrap">{{ testCase.input }}</div>
 							</div>
 							<div class="space-y-2">
 								<div class="text-xs text-ink-gray-7">
 									{{ __('Your Output') }}
 								</div>
-								<div class="text-ink-gray-9">
-									{{ testCase.output }}
-								</div>
+								<div class="text-ink-gray-9 whitespace-pre-wrap">{{ testCase.output }}</div>
 							</div>
 							<div class="space-y-2">
 								<div class="text-xs text-ink-gray-7">
 									{{ __('Expected Output') }}
 								</div>
-								<div class="text-ink-gray-9">
-									{{ testCase.expected_output }}
-								</div>
+								<div class="text-ink-gray-9 whitespace-pre-wrap">{{ testCase.expected_output }}</div>
 							</div>
 						</div>
 					</div>
