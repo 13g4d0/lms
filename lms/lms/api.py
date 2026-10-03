@@ -2316,6 +2316,13 @@ def _ejecutar_en_falcon(url: str, lenguaje: str, programa: str, entrada: str) ->
 	return "".join(trozos).strip(), codigo_salida
 
 
+def _cabe(texto: str, maximo: int = 140) -> str:
+	"""[taller] «output» de LMS Test Case Submission es un campo Data de 140 caracteres: una salida más larga (una
+	traza de error, un print grande) hacía fallar el guardado del envío entero (CharacterLengthExceededError). Se guarda
+	el FINAL, que en una traza es lo que dice qué pasó. El estado del caso ya se calculó con la salida completa."""
+	return texto if len(texto) <= maximo else "…" + texto[-(maximo - 1) :]
+
+
 def _test_cases_verificados(exercise: str, test_cases: list, code: str = "") -> list:
 	"""[taller] El estado de cada caso lo decide el servidor, nunca el navegador.
 
@@ -2361,7 +2368,7 @@ def _test_cases_verificados(exercise: str, test_cases: list, code: str = "") -> 
 		{
 			"input": caso.input,
 			# La salida es obligatoria en el DocType: sin esto, un programa que no imprime nada no se puede guardar.
-			"output": salida if salida.strip() else "(sin salida)",
+			"output": _cabe(salida) if salida.strip() else "(sin salida)",
 			"expected_output": caso.expected_output,
 			"status": "Passed" if ok else "Failed",
 		}
