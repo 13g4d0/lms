@@ -1,7 +1,8 @@
-import { useTimeAgo } from '@vueuse/core'
+import dayjs from '@/utils/dayjs'
 
+// [taller] Con dayjs, que habla el idioma del usuario; useTimeAgo de @vueuse solo habla inglés.
 export function timeAgo(date) {
-	return useTimeAgo(date).value
+	return dayjs(date).fromNow()
 }
 
 // Map the site's System Settings date_format (boot data) to dayjs tokens.

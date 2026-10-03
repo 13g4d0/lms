@@ -11,6 +11,7 @@ import 'dayjs/esm/locale/ar'
 import 'dayjs/esm/locale/he'
 import 'dayjs/esm/locale/fa'
 import 'dayjs/esm/locale/ur'
+import 'dayjs/esm/locale/es'
 
 dayjs.extend(updateLocale)
 dayjs.extend(relativeTime)
@@ -21,11 +22,13 @@ dayjs.extend(isSameOrAfter)
 dayjs.extend(utc)
 dayjs.extend(timezone)
 
-if (
-	document.documentElement.dir === 'rtl' &&
-	['ar', 'he', 'fa', 'ur'].includes(window.lang)
-) {
-	dayjs.locale(window.lang)
+// [taller] Antes el idioma solo se aplicaba a ar/he/fa/ur (y solo con la página de derecha a izquierda): en español,
+// «hace 2 horas» salía «2 hours ago». Ahora se aplica el idioma del usuario (o su idioma base: es-MX → es) si dayjs
+// lo tiene cargado.
+const lang = String(window.lang || '').toLowerCase()
+const locale = [lang, lang.split('-')[0]].find((l) => l && dayjs.Ls[l])
+if (locale) {
+	dayjs.locale(locale)
 }
 
 export default dayjs
